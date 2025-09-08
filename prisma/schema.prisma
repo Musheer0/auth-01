@@ -6,10 +6,52 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+
+model User {
+  id String @id @default(uuid())
+  name String
+  image_url String @default("https://fastly.picsum.photos/id/142/200/200.jpg?hmac=L8yY8tFPavTj32ZpuPiqsLsfWgDvW1jvoJ0ETDOUMGg")
+  primary_email String @unique
+  password String?
+  is_verified Boolean @default(false)
+  verified_at DateTime?
+  is_banned Boolean @default(false)
+  banned_at DateTime?
+  verification_tokens VerificationToken[]
+  sessions Session[]
+  created_at  DateTime @default(now())
+  updated_at DateTime @updatedAt
+}
+
+enum VerificationTokenScope{
+  EMAIL_VERIFY
+  PASSWORD_RESET
+}
+
+model VerificationToken{
+  id String @id @default(uuid())
+  token String
+  identifier_id String
+  identifier User @relation(references: [id],fields: [identifier_id],onDelete: Cascade)
+  expires_at DateTime 
+  scope VerificationTokenScope @default(EMAIL_VERIFY)
+  created_at  DateTime @default(now())
+  updated_at DateTime @updatedAt
+}
+
+model Session {
+    id String @id @default(uuid())
+  identifier_id String
+  identifier User @relation(references: [id],fields: [identifier_id],onDelete: Cascade)
+  expires_at DateTime 
+  scope VerificationTokenScope @default(EMAIL_VERIFY)
+  created_at  DateTime @default(now())
+  updated_at DateTime @updatedAt
 }
