@@ -54,4 +54,7 @@ model Session {
   scope VerificationTokenScope @default(EMAIL_VERIFY)
   created_at  DateTime @default(now())
   updated_at DateTime @updatedAt
+  ip String
+  user_agent String
+  os String
 }
