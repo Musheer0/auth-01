@@ -30,10 +30,26 @@ model User {
   provider Provider @default(CREDENTIALS)
   verification_tokens VerificationToken[]
   sessions Session[]
+  accounts Account[]
   created_at  DateTime @default(now())
   updated_at DateTime @updatedAt
 }
-
+enum OAuthProvider {
+  GOOGLE
+}
+model Account {
+  id String @id @default(uuid())
+  identifier_id String
+  oauth_id String  @map("sub")
+  provider OAuthProvider @default(GOOGLE)
+  refresh_token String?
+  email String 
+  identifier User @relation(references: [id],fields: [identifier_id],onDelete: Cascade)
+  created_at  DateTime @default(now())
+  updated_at DateTime @updatedAt
+  @@unique([oauth_id,identifier_id])
+  @@unique([oauth_id,provider])
+}
 enum VerificationTokenScope{
   EMAIL_VERIFY
   PASSWORD_RESET
