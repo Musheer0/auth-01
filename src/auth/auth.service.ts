@@ -16,6 +16,11 @@ export class AuthService {
         private jwtService:JwtService
     ){
     }
+    /**
+ * Initialize a new user with the given email if not already registered.
+ *
+ * @payload {string} email - The email address to initialize.
+ */
       async  IntializeUser (email:string){
         const initialized_user = await CreateInitialUser(this.prisma,email)
         if(initialized_user.error){
@@ -26,7 +31,14 @@ export class AuthService {
         }
         return initialized_user
         }
-     async VerifyCreateUser(data:VerifyCreateUserDto,metadata:TclientMetadata){
+    /**
+ * Verifies the OTP token and creates a new credentials-based user session.
+ *
+ * @payload {VerifyCreateUserDto} data - token_id, otp, name, password
+ * @payload {TclientMetadata} metadata - client IP, user agent, OS
+ * @returns JWT session token + sanitized user object
+ */
+     async VerifyCreateCredentialsUser(data:VerifyCreateUserDto,metadata:TclientMetadata){
         const token = await VerifyToken($Enums.VerificationTokenScope.EMAIL_VERIFY,data.token_id,data.otp,this.prisma)
           if(token.error){
             if(token.error.includes('internal server')){
