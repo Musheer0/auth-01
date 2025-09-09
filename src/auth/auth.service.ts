@@ -24,6 +24,8 @@ import { PasswordResetDto } from 'src/dto/users/password-reset-dto';
 import { GetUserById } from './model/users/get-user-by-id';
 import { updateUserPassword } from './model/users/update-password';
 import { createEmailVerificationToken } from './model/verification-tokens/create-email-verification-token';
+import { loginUser } from './model/users/login-user';
+import { SignInUserDto } from 'src/dto/users/sign-in-user.dto';
 
 @Injectable()
 export class AuthService {
@@ -220,6 +222,64 @@ export class AuthService {
       return token;
     } catch (error) {
       console.error('[error sending email]', error);
+      throw new InternalServerErrorException();
+    }
+  }
+  /**
+ * Verifies the password reset token and OTP, then updates the user's password.
+ *
+ * @payload {SignInUserDto} data - token_id, otp, password
+ * @payload {TClientMetadata} metadata - client IP, user agent, OS
+ * @returns JWT session token + sanitized user object
+ */
+
+    async signInUser(data: SignInUserDto, metadata: TclientMetadata) {
+    try {
+      // Step 1: loginUser returns { user?, error? }
+      const { user, error } = await loginUser(this.prisma, data.email, data.password);
+
+      if (error) {
+        if (error.includes("internal server")) {
+          throw new InternalServerErrorException();
+        }
+        throw new BadRequestException(error);
+      }
+
+      if (user) {
+        try {
+          // Step 2: create session
+          const session = await CreateSession(
+            user.id,
+            this.prisma,
+            metadata.ip,
+            metadata.userAgent,
+            metadata.os
+          );
+
+          // Step 3: sign JWT
+          const jwt_payload = {
+            token: session.sessionId,
+            expires: session.expiresAt,
+            user_id: user.id,
+          };
+          const jwt_token = this.jwtService.sign(jwt_payload);
+
+          // Step 4: remove sensitive fields
+          const { password, verified_at, banned_at, is_banned, ...safeUser } = user;
+
+          return {
+            token: jwt_token,
+            user: safeUser,
+          };
+        } catch (err) {
+          console.error("[sign-in user error]", err);
+          throw new InternalServerErrorException();
+        }
+      }
+
+      throw new InternalServerErrorException();
+    } catch (err) {
+      console.error("[sign-in flow error]", err);
       throw new InternalServerErrorException();
     }
   }
