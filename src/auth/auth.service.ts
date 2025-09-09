@@ -226,20 +226,24 @@ export class AuthService {
     }
   }
   /**
- * Verifies the password reset token and OTP, then updates the user's password.
- *
- * @payload {SignInUserDto} data - token_id, otp, password
- * @payload {TClientMetadata} metadata - client IP, user agent, OS
- * @returns JWT session token + sanitized user object
- */
+   * Verifies the password reset token and OTP, then updates the user's password.
+   *
+   * @payload {SignInUserDto} data - token_id, otp, password
+   * @payload {TClientMetadata} metadata - client IP, user agent, OS
+   * @returns JWT session token + sanitized user object
+   */
 
-    async signInUser(data: SignInUserDto, metadata: TclientMetadata) {
+  async signInUser(data: SignInUserDto, metadata: TclientMetadata) {
     try {
       // Step 1: loginUser returns { user?, error? }
-      const { user, error } = await loginUser(this.prisma, data.email, data.password);
+      const { user, error } = await loginUser(
+        this.prisma,
+        data.email,
+        data.password,
+      );
 
       if (error) {
-        if (error.includes("internal server")) {
+        if (error.includes('internal server')) {
           throw new InternalServerErrorException();
         }
         throw new BadRequestException(error);
@@ -253,7 +257,7 @@ export class AuthService {
             this.prisma,
             metadata.ip,
             metadata.userAgent,
-            metadata.os
+            metadata.os,
           );
 
           // Step 3: sign JWT
@@ -265,21 +269,22 @@ export class AuthService {
           const jwt_token = this.jwtService.sign(jwt_payload);
 
           // Step 4: remove sensitive fields
-          const { password, verified_at, banned_at, is_banned, ...safeUser } = user;
+          const { password, verified_at, banned_at, is_banned, ...safeUser } =
+            user;
 
           return {
             token: jwt_token,
             user: safeUser,
           };
         } catch (err) {
-          console.error("[sign-in user error]", err);
+          console.error('[sign-in user error]', err);
           throw new InternalServerErrorException();
         }
       }
 
       throw new InternalServerErrorException();
     } catch (err) {
-      console.error("[sign-in flow error]", err);
+      console.error('[sign-in flow error]', err);
       throw new InternalServerErrorException();
     }
   }

@@ -288,68 +288,71 @@ export class AuthController {
     return this.authService.ResendEmailVerificationToken(body.email);
   }
   /**
- * @route POST /sign-in
- * @summary Sign in a credentials-based user and create a session.
- *
- * @description
- * This endpoint allows a user to log in with their email and password.
- *
- * Workflow:
- * 1. Accepts the user's email and password, along with client metadata (IP, OS, User-Agent).
- * 2. Validates the credentials using the `loginUser` helper.
- * 3. If credentials are valid, creates a new session for the user.
- * 4. Signs a JWT token containing session ID, expiry, and user ID.
- * 5. Returns the signed JWT and safe user object (sensitive fields like password are excluded).
- *
- * @param {SignInUserDto} body - The request payload containing credentials.
- * @param {string} body.email - User's email address (must be valid).
- * @param {string} body.password - User's password (min 6 characters).
- * @param {TclientMetadata} metadata - Client metadata including IP, OS, and User-Agent.
- *
- * @returns {Promise<Object>} Response object
- * @returns {string} token - JWT token for session authentication.
- * @returns {Object} user - Safe user object, excluding sensitive fields.
- * @returns {string} user.id - User's unique ID.
- * @returns {Date} user.created_at - User creation timestamp.
- * @returns {Date} user.updated_at - User last update timestamp.
- * @returns {string} user.name - User's name.
- * @returns {string} user.primary_email - User's primary email.
- * @returns {string} user.image_url - User's profile image URL.
- * @returns {boolean} user.is_verified - Whether the user's email is verified.
- *
- * @throws {BadRequestException} If credentials are invalid.
- * @throws {InternalServerErrorException} If session creation or JWT signing fails.
- *
- * @example
- * // Request
- * POST /sign-in
- * {
- *   "email": "user@example.com",
- *   "password": "SecurePass123"
- * }
- *
- * // Success Response
- * {
- *   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
- *   "user": {
- *     "id": "usr_92jx81m4",
- *     "created_at": "2025-09-09T14:00:00.000Z",
- *     "updated_at": "2025-09-10T10:00:00.000Z",
- *     "name": "John Doe",
- *     "primary_email": "user@example.com",
- *     "image_url": "https://example.com/avatar.png",
- *     "is_verified": true
- *   }
- * }
- *
- * // Error Response
- * {
- *   "statusCode": 400,
- *   "message": "Invalid email or password"
- * }
- */
+   * @route POST /sign-in
+   * @summary Sign in a credentials-based user and create a session.
+   *
+   * @description
+   * This endpoint allows a user to log in with their email and password.
+   *
+   * Workflow:
+   * 1. Accepts the user's email and password, along with client metadata (IP, OS, User-Agent).
+   * 2. Validates the credentials using the `loginUser` helper.
+   * 3. If credentials are valid, creates a new session for the user.
+   * 4. Signs a JWT token containing session ID, expiry, and user ID.
+   * 5. Returns the signed JWT and safe user object (sensitive fields like password are excluded).
+   *
+   * @param {SignInUserDto} body - The request payload containing credentials.
+   * @param {string} body.email - User's email address (must be valid).
+   * @param {string} body.password - User's password (min 6 characters).
+   * @param {TclientMetadata} metadata - Client metadata including IP, OS, and User-Agent.
+   *
+   * @returns {Promise<Object>} Response object
+   * @returns {string} token - JWT token for session authentication.
+   * @returns {Object} user - Safe user object, excluding sensitive fields.
+   * @returns {string} user.id - User's unique ID.
+   * @returns {Date} user.created_at - User creation timestamp.
+   * @returns {Date} user.updated_at - User last update timestamp.
+   * @returns {string} user.name - User's name.
+   * @returns {string} user.primary_email - User's primary email.
+   * @returns {string} user.image_url - User's profile image URL.
+   * @returns {boolean} user.is_verified - Whether the user's email is verified.
+   *
+   * @throws {BadRequestException} If credentials are invalid.
+   * @throws {InternalServerErrorException} If session creation or JWT signing fails.
+   *
+   * @example
+   * // Request
+   * POST /sign-in
+   * {
+   *   "email": "user@example.com",
+   *   "password": "SecurePass123"
+   * }
+   *
+   * // Success Response
+   * {
+   *   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+   *   "user": {
+   *     "id": "usr_92jx81m4",
+   *     "created_at": "2025-09-09T14:00:00.000Z",
+   *     "updated_at": "2025-09-10T10:00:00.000Z",
+   *     "name": "John Doe",
+   *     "primary_email": "user@example.com",
+   *     "image_url": "https://example.com/avatar.png",
+   *     "is_verified": true
+   *   }
+   * }
+   *
+   * // Error Response
+   * {
+   *   "statusCode": 400,
+   *   "message": "Invalid email or password"
+   * }
+   */
   @Post('/sign-in')
-  async SignInCredentialsUser(@Body() body: SignInUserDto,    @GetClientMetadata() metadata: TclientMetadata,) {
-    return this.authService.signInUser(body,metadata)
+  async SignInCredentialsUser(
+    @Body() body: SignInUserDto,
+    @GetClientMetadata() metadata: TclientMetadata,
+  ) {
+    return this.authService.signInUser(body, metadata);
   }
 }
