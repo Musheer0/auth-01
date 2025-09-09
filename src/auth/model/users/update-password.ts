@@ -2,27 +2,28 @@ import { PrismaClient } from '@prisma/client';
 import * as argon2 from 'argon2';
 
 /**
- * Update an existing user after verification
+ * Update a user's password
  * @param prisma PrismaClient
  * @param userId string - id of the existing user
- * @param name string - set user name
- * @param password string - raw password (will be hashed)
+ * @param newPassword string - raw password (will be hashed)
  * @returns User | { error: string }
  */
-export const CreateCrendentialsUser = async (
+export const updateUserPassword = async (
   prisma: PrismaClient,
   userId: string,
-  name: string,
-  password: string,
+  newPassword: string,
 ) => {
-  const hashedPassword = await argon2.hash(password);
+  const hashedPassword = await argon2.hash(newPassword);
+
   const updatedUser = await prisma.user.update({
     where: { id: userId },
     data: {
-      name,
       password: hashedPassword,
-      is_verified: true,
-      verified_at: new Date(),
+    },
+  });
+  await prisma.session.deleteMany({
+    where: {
+      identifier_id: userId,
     },
   });
   return updatedUser;

@@ -1,11 +1,9 @@
 import { IsString } from 'class-validator';
-export class VerifyCreateUserDto {
+export class PasswordResetDto {
   @IsString()
   token_id: string;
   @IsString()
   otp: string;
-  @IsString()
-  name: string;
   @IsString()
   password: string;
 }
