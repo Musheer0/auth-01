@@ -127,7 +127,6 @@ export class AuthController {
     @GetClientMetadata() metadata: TclientMetadata,
     @Res() res: Response,
   ) {
-    console.log(res);
     const response = await this.authService.VerifyCreateCredentialsUser(
       body,
       metadata,
