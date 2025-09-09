@@ -28,6 +28,7 @@ export const GetClientMetadata = createParamDecorator(
       ip,
       userAgent,
       os,
+      isWeb:!!req.headers['x-web']
     };
   }
 );

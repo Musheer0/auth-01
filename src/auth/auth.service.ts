@@ -7,11 +7,13 @@ import { VerifyCreateUserDto } from 'src/dto/users/verify-create-user-dto';
 import { CreateCrendentialsUser } from './model/users/create-crendentials-user';
 import { TclientMetadata } from 'src/types/client-metadata';
 import { CreateSession } from './model/sessions/create-session';
+import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
 export class AuthService {
     constructor(
-        private prisma:PrismaService
+        private prisma:PrismaService,
+        private jwtService:JwtService
     ){
     }
       async  IntializeUser (email:string){
@@ -24,7 +26,7 @@ export class AuthService {
         }
         return initialized_user
         }
-     async VerifyUser(data:VerifyCreateUserDto,metadata:TclientMetadata){
+     async VerifyCreateUser(data:VerifyCreateUserDto,metadata:TclientMetadata){
         const token = await VerifyToken($Enums.VerificationTokenScope.EMAIL_VERIFY,data.token_id,data.otp,this.prisma)
           if(token.error){
             if(token.error.includes('internal server')){
@@ -35,8 +37,18 @@ export class AuthService {
         if(token.userid){
         try {
         const new_user = await CreateCrendentialsUser(this.prisma,token.userid,data.name,data.password)
+        const {password,verified_at,banned_at,is_banned,...user}= new_user
         const session = await CreateSession(new_user.id,this.prisma,metadata.ip,metadata.userAgent,metadata.os)
-        return session
+        const jwt_payload = {
+            token:session.sessionId,
+            expires:session.expiresAt,
+            user_id:new_user.id
+        }
+        const jwt_token =this.jwtService.sign(jwt_payload)      
+        return {
+            token:jwt_token,
+            user
+        }
         } catch (error) {
             console.error('[create credentials user error]',error)
             throw new InternalServerErrorException()
