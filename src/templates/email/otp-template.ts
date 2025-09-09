@@ -1,4 +1,14 @@
-export function generateOtpEmail({ title, desc, email, otp }:{ title:string, desc:string, email:string, otp:string }) {
+export function generateOtpEmail({
+  title,
+  desc,
+  email,
+  otp,
+}: {
+  title: string;
+  desc: string;
+  email: string;
+  otp: string;
+}) {
   return `
   <html>
     <body style="font-family: Arial, sans-serif; background:#f9fafb; padding:20px;">

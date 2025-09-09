@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from '@prisma/client';
 
 /**
  * Create a session for a user
@@ -15,7 +15,7 @@ export const CreateSession = async (
   ip: string,
   userAgent: string,
   os: string,
-  expiresIn: number = 1000 * 60 * 60 * 24 * 7 // default: 7 days
+  expiresIn: number = 1000 * 60 * 60 * 24 * 7, // default: 7 days
 ) => {
   const session = await prisma.session.create({
     data: {
