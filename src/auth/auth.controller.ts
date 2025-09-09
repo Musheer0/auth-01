@@ -1,4 +1,12 @@
-import { Body, Controller, Post, Res } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Post,
+  Query,
+  Res,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { InitializeUserDto } from 'src/dto/users/initialize-user.dto';
 import { VerifyCreateUserDto } from 'src/dto/users/verify-create-user-dto';
@@ -8,6 +16,7 @@ import { Response } from 'express';
 import { PasswordResetTokenDto } from 'src/dto/users/password-reset-token-dto';
 import { PasswordResetDto } from 'src/dto/users/password-reset-dto';
 import { SignInUserDto } from 'src/dto/users/sign-in-user.dto';
+import { OAuthGoogleQueryParamsDto } from 'src/dto/users/oauth/google/oauth-google.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -354,5 +363,116 @@ export class AuthController {
     @GetClientMetadata() metadata: TclientMetadata,
   ) {
     return this.authService.signInUser(body, metadata);
+  }
+
+  /**
+   * Redirects the user to Google's OAuth 2.0 authorization page with a dynamic redirect URI.
+   *
+   * This endpoint initiates the Google OAuth flow by constructing the authorization URL
+   * with required query parameters like `client_id`, `redirect_uri`, `response_type`,
+   * `scope`, `access_type`, and `prompt`. The `redirect_url` provided by the frontend is used
+   * as both the OAuth `redirect_uri` and the `state` parameter, which Google will return
+   * to the callback endpoint after authorization.
+   *
+   * Throws a `BadRequestException` if the `redirect_url` is missing.
+   *
+   * @param {Response} res - Express response object used to perform the redirect.
+   * @param {string} redirect_url - Required frontend URL to redirect the user after login; used as `redirect_uri` and `state`.
+   *
+   * @example
+   * // Request
+   * GET /sign-in/google?redirect_url=http://localhost:3000/dashboard
+   *
+   * // Result
+   * Redirects the user to:
+   * https://accounts.google.com/o/oauth2/v2/auth?
+   * client_id=YOUR_CLIENT_ID&
+   * redirect_uri=http://localhost:3000/dashboard&
+   * response_type=code&
+   * scope=openid%20email%20profile&
+   * access_type=offline&
+   * prompt=consent&
+   * state=http%3A%2F%2Flocalhost%3A3000%2Fdashboard
+   *
+   * // Error Response (if redirect_url is missing)
+   * {
+   *   "statusCode": 400,
+   *   "message": "missing redirect uri"
+   * }
+   */
+  @Get('sign-in/google')
+  async RedirectToGoogleOauth(
+    @Res() res: Response,
+    @Query('redirect_url') redirect_url: string,
+  ) {
+    const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+    if (redirect_url) throw new BadRequestException('missing redirect uri');
+    const options = {
+      client_id: process.env.GOOGLE_CLIENT_ID!,
+      redirect_uri: redirect_url,
+      response_type: 'code',
+      scope: ['openid', 'email', 'profile'].join(' '),
+      access_type: 'offline',
+      prompt: 'consent',
+      state: redirect_url || '', // pass frontend redirect URL in state
+    };
+
+    url.search = new URLSearchParams(options).toString();
+
+    return res.redirect(url.toString());
+  }
+  /**
+   * Handles Google OAuth callback and signs in the user.
+   *
+   * This endpoint receives the query parameters returned by Google after user authorization,
+   * fetches the user's Google profile, links or creates a user in the database, handles banned accounts
+   * and email mismatches, creates a session, and returns a JWT token along with a sanitized user object.
+   *
+   * @param {OAuthGoogleQueryParamsDto} query - The query parameters from Google OAuth callback:
+   *   - `code`: Authorization code returned by Google.
+   *   - `scope`: OAuth scopes granted by the user.
+   *   - `authuser`: The authenticated Google user index.
+   *   - `prompt`: The OAuth prompt type (e.g., consent, select_account).
+   *   - `state?`: Optional state parameter for CSRF protection or redirection.
+   *
+   * @param {TclientMetadata} metadata - Metadata about the client making the request:
+   *   - `ip`: Client IP address.
+   *   - `userAgent`: Client user agent string (browser info, OS, etc.).
+   *   - `os`: Client operating system.
+   *
+   * @returns {Promise<{ token: string; user: any }>} JWT session token and sanitized user object.
+   *
+   * @throws {BadRequestException} If the Google email is not verified, the account is banned, or any other validation fails.
+   *
+   * @example
+   * // Request
+   * POST /callback/google?code=4/0AX4XfWg...&scope=email%20profile&authuser=0&prompt=consent
+   *
+   * // Success Response
+   * {
+   *   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+   *   "user": {
+   *     "id": "usr_92jx81m4",
+   *     "created_at": "2025-09-09T14:00:00.000Z",
+   *     "updated_at": "2025-09-10T10:00:00.000Z",
+   *     "name": "John Doe",
+   *     "primary_email": "user@example.com",
+   *     "image_url": "https://example.com/avatar.png",
+   *     "is_verified": true
+   *   }
+   * }
+   *
+   * // Error Response (unverified email or banned account)
+   * {
+   *   "statusCode": 400,
+   *   "message": "Your Google email is not verified"
+   * }
+   */
+  @Post('/callback/google')
+  async SignInWithGoogle(
+    @Query() query: OAuthGoogleQueryParamsDto,
+    @GetClientMetadata() metadata: TclientMetadata,
+  ) {
+    return this.authService.SignInWithGoogle(query, metadata);
   }
 }

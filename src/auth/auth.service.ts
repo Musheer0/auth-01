@@ -26,6 +26,10 @@ import { updateUserPassword } from './model/users/update-password';
 import { createEmailVerificationToken } from './model/verification-tokens/create-email-verification-token';
 import { loginUser } from './model/users/login-user';
 import { SignInUserDto } from 'src/dto/users/sign-in-user.dto';
+import { GetOauthUserInfo } from './model/users/oauth/google/get-oauth-user-info';
+import { OAuthGoogleQueryParamsDto } from 'src/dto/users/oauth/google/oauth-google.dto';
+import { CreateGoogleOauthUser } from './model/users/oauth/google/create-oauth-user-info';
+import { JwtToken } from 'src/types/jwt-token';
 
 @Injectable()
 export class AuthService {
@@ -234,58 +238,88 @@ export class AuthService {
    */
 
   async signInUser(data: SignInUserDto, metadata: TclientMetadata) {
-    try {
-      // Step 1: loginUser returns { user?, error? }
-      const { user, error } = await loginUser(
-        this.prisma,
-        data.email,
-        data.password,
-      );
+    // Step 1: loginUser returns { user?, error? }
+    const { user, error } = await loginUser(
+      this.prisma,
+      data.email,
+      data.password,
+    );
 
-      if (error) {
-        if (error.includes('internal server')) {
-          throw new InternalServerErrorException();
-        }
-        throw new BadRequestException(error);
+    if (error) {
+      if (error.includes('internal server')) {
+        throw new InternalServerErrorException();
       }
-
-      if (user) {
-        try {
-          // Step 2: create session
-          const session = await CreateSession(
-            user.id,
-            this.prisma,
-            metadata.ip,
-            metadata.userAgent,
-            metadata.os,
-          );
-
-          // Step 3: sign JWT
-          const jwt_payload = {
-            token: session.sessionId,
-            expires: session.expiresAt,
-            user_id: user.id,
-          };
-          const jwt_token = this.jwtService.sign(jwt_payload);
-
-          // Step 4: remove sensitive fields
-          const { password, verified_at, banned_at, is_banned, ...safeUser } =
-            user;
-
-          return {
-            token: jwt_token,
-            user: safeUser,
-          };
-        } catch (err) {
-          console.error('[sign-in user error]', err);
-          throw new InternalServerErrorException();
-        }
-      }
-
-      throw new InternalServerErrorException();
-    } catch (err) {
-      console.error('[sign-in flow error]', err);
-      throw new InternalServerErrorException();
+      throw new BadRequestException(error);
     }
+    if (user) {
+      try {
+        // Step 2: create session
+        const session = await CreateSession(
+          user.id,
+          this.prisma,
+          metadata.ip,
+          metadata.userAgent,
+          metadata.os,
+        );
+
+        // Step 3: sign JWT
+        const jwt_payload: JwtToken = {
+          token: session.sessionId,
+          user_id: user.id,
+        };
+        const jwt_token = this.jwtService.sign(jwt_payload);
+
+        // Step 4: remove sensitive fields
+        const { password, verified_at, banned_at, is_banned, ...safeUser } =
+          user;
+
+        return {
+          token: jwt_token,
+          user: safeUser,
+        };
+      } catch (err) {
+        console.error('[sign-in user error]', err);
+        throw new InternalServerErrorException();
+      }
+    }
+  }
+  /**
+   * Signs in a user using Google OAuth.
+   *
+   * Fetches Google OAuth user info using the provided authorization code,
+   * creates or updates the user in the database, and returns a JWT session token
+   * along with a sanitized user object.
+   *
+   * @payload {OAuthGoogleQueryParamsDto} query - OAuth query parameters including `code`, `scope`, `authuser`, `prompt`, and optional `state`.
+   * @payload {TclientMetadata} metadata - Client metadata such as IP, user agent, and OS.
+   *          A promise that resolves to an object containing the JWT session token and sanitized user data.
+   */
+  async SignInWithGoogle(
+    query: OAuthGoogleQueryParamsDto,
+    metadata: TclientMetadata,
+  ) {
+    if (!query.state) throw new BadRequestException('missing redirect uri');
+    const oauth_user = await GetOauthUserInfo(
+      this.prisma,
+      query.code,
+      query.state,
+    );
+    const user = await CreateGoogleOauthUser(
+      this.prisma,
+      oauth_user.user,
+      metadata,
+      oauth_user.token,
+    );
+    const { password, verified_at, banned_at, is_banned, ...safeUser } =
+      user.user;
+    const jwt_payload: JwtToken = {
+      token: user.sessionId,
+      user_id: user.user.id,
+    };
+    const jwt_token = this.jwtService.sign(jwt_payload);
+    return {
+      token: jwt_token,
+      user: safeUser,
+    };
   }
 }

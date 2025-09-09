@@ -19,7 +19,7 @@ export const loginUser = async (
   });
 
   if (!user) {
-    return { error: 'User not found' };
+    return { error: 'Invalid credentials' };
   }
 
   // Step 2: Check provider and password existence
@@ -44,7 +44,7 @@ export const loginUser = async (
   const isPasswordValid = await argon2.verify(user.password, password);
 
   if (!isPasswordValid) {
-    return { error: 'Invalid password' };
+    return { error: 'Invalid credentials' };
   }
 
   // Step 5: Return full user object
