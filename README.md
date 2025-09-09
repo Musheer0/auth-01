@@ -1,4 +1,3 @@
----
 
 # Auth Module API
 
