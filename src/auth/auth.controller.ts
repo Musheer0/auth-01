@@ -5,6 +5,7 @@ import {
   Get,
   Post,
   Query,
+  Req,
   Res,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
@@ -12,12 +13,14 @@ import { InitializeUserDto } from 'src/dto/users/initialize-user.dto';
 import { VerifyCreateUserDto } from 'src/dto/users/verify-create-user-dto';
 import { GetClientMetadata } from 'src/decorators/get-client-metadata';
 import { TclientMetadata } from 'src/types/client-metadata';
-import { Response } from 'express';
+import {Response } from 'express';
 import { PasswordResetTokenDto } from 'src/dto/users/password-reset-token-dto';
 import { PasswordResetDto } from 'src/dto/users/password-reset-dto';
 import { SignInUserDto } from 'src/dto/users/sign-in-user.dto';
 import { OAuthGoogleQueryParamsDto } from 'src/dto/users/oauth/google/oauth-google.dto';
-
+const COOKIE_NAME = process.env.COOKIE_NAME||'session'
+const COOKIE_EXP = process.env.COOKIE_EXP_IN_MS || 604800000
+   const getcookieExpDate = ()=>new Date(Date.now() + Number(COOKIE_EXP));
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -118,6 +121,7 @@ export class AuthController {
    *
    * // Success Response
    * {
+   * //already set as cookie
    *   "token": "jwt.session.token.here",
    *   "user": {
    *     "id": "usr_92jx81m4",
@@ -135,13 +139,22 @@ export class AuthController {
   async SignUpVerifyCredentialsUser(
     @Body() body: VerifyCreateUserDto,
     @GetClientMetadata() metadata: TclientMetadata,
-    @Res() res: Response,
+    @Res({passthrough:true}) res: Response,
   ) {
-    const response = await this.authService.VerifyCreateCredentialsUser(
+    const {token,user} = await this.authService.VerifyCreateCredentialsUser(
       body,
       metadata,
     );
-    return response;
+  
+    res.cookie(COOKIE_NAME, token, {
+  maxAge: Number(COOKIE_EXP),                // relative expiry (preferred)
+  expires: getcookieExpDate(),             // absolute expiry (extra safe)
+  httpOnly: true,                       // can’t touch with JS
+  secure: process.env.NODE_ENV === 'production', // only HTTPS in prod
+  sameSite: 'strict',                   // CSRF protection
+  signed: true,                         // requires cookieParser(secret)
+});
+  return {user}
   }
   /**
    * @route POST /reset-password/request
@@ -361,8 +374,20 @@ export class AuthController {
   async SignInCredentialsUser(
     @Body() body: SignInUserDto,
     @GetClientMetadata() metadata: TclientMetadata,
+    @Res({passthrough:true}) res: Response,
   ) {
-    return this.authService.signInUser(body, metadata);
+    const data= await this.authService.signInUser(body, metadata);
+    if(!data) throw new BadRequestException("error signing in your account")
+    const {user,token} =data
+  res.cookie(COOKIE_NAME, token, {
+  maxAge: Number(COOKIE_EXP),                // relative expiry (preferred)
+  expires: getcookieExpDate(),             // absolute expiry (extra safe)
+  httpOnly: true,                       // can’t touch with JS
+  secure: process.env.NODE_ENV === 'production', // only HTTPS in prod
+  sameSite: 'strict',                   // CSRF protection
+  signed: true,                         // requires cookieParser(secret)
+});
+  return {user}
   }
 
   /**
@@ -472,7 +497,17 @@ export class AuthController {
   async SignInWithGoogle(
     @Query() query: OAuthGoogleQueryParamsDto,
     @GetClientMetadata() metadata: TclientMetadata,
+    @Res({passthrough:true}) res: Response,
   ) {
-    return this.authService.SignInWithGoogle(query, metadata);
+   const {token,user} =await this.authService.SignInWithGoogle(query, metadata);
+  res.cookie(COOKIE_NAME, token, {
+  maxAge: Number(COOKIE_EXP),                // relative expiry (preferred)
+  expires: getcookieExpDate(),             // absolute expiry (extra safe)
+  httpOnly: true,                       // can’t touch with JS
+  secure: process.env.NODE_ENV === 'production', // only HTTPS in prod
+  sameSite: 'strict',                   // CSRF protection
+  signed: true,                         // requires cookieParser(secret)
+});
+  return {user}
   }
 }
