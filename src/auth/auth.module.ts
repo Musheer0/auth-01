@@ -6,9 +6,12 @@ import { JwtStrategey } from './strategy/jwt-startegy';
 // import { JwtGuard } from './guards/jwt-auth.guard';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
+import { EmailGuard } from './guards/email.guard';
+import { TokenGuard } from './guards/token.guard';
+import { UserIdGuard } from './guards/userId.guard';
 
 @Module({
-  providers: [AuthService, JwtStrategey],
+  providers: [AuthService, JwtStrategey,EmailGuard,TokenGuard,UserIdGuard],
   imports: [
     PrismaModule,
     JwtModule.register({

@@ -23,6 +23,10 @@ import { OAuthGoogleQueryParamsDto } from 'src/dto/users/oauth/google/oauth-goog
 import { JwtGuard } from './guards/jwt-auth.guard';
 import { Toggle2faDto } from 'src/dto/users/toggle-2fa.dto';
 import { TwoFaDto } from 'src/dto/users/2fa/2fa.dto';
+import { Throttle } from '@nestjs/throttler';
+import { EmailGuard } from './guards/email.guard';
+import { TokenGuard } from './guards/token.guard';
+import { UserIdGuard } from './guards/userId.guard';
 const COOKIE_NAME = process.env.COOKIE_NAME||'session'
 const COOKIE_EXP = process.env.COOKIE_EXP_IN_MS || 604800000
    const getcookieExpDate = ()=>new Date(Date.now() + Number(COOKIE_EXP));
@@ -74,6 +78,7 @@ export class AuthController {
    *   "error": "User with this email already exists."
    * }
    */
+  @UseGuards(EmailGuard)
   @Post('/sign-up/verify-email')
   async SignUpUser(@Body() body: InitializeUserDto) {
     return this.authService.IntializeUser(body.email);
@@ -139,7 +144,7 @@ export class AuthController {
    *   }
    * }
    */
-
+  @UseGuards(TokenGuard)
   @Post('/sign-up')
   async SignUpVerifyCredentialsUser(
     @Body() body: VerifyCreateUserDto,
@@ -209,6 +214,7 @@ export class AuthController {
    *   "message": "User not found"
    * }
    */
+  @UseGuards(EmailGuard)
   @Post('/reset-password/request')
   async RequestResetPasswordToken(
     @Body() body: PasswordResetTokenDto,
@@ -261,6 +267,7 @@ export class AuthController {
    *   "message": "Invalid OTP"
    * }
    */
+  @UseGuards(TokenGuard)
   @Post('/reset-password')
   async ResetPassword(@Body() body: PasswordResetDto) {
     return this.authService.ResetPassword(body);
@@ -311,6 +318,7 @@ export class AuthController {
    *   "message": "User not found"
    * }
    */
+  @UseGuards(EmailGuard)
   @Post('/resend/email-verification')
   async ResendEmailVerificationToken(@Body() body: InitializeUserDto) {
     return this.authService.ResendEmailVerificationToken(body.email);
@@ -376,6 +384,7 @@ export class AuthController {
    *   "message": "Invalid email or password"
    * }
    */
+  @UseGuards(EmailGuard)
   @Post('/sign-in')
   async SignInCredentialsUser(
     @Body() body: SignInUserDto,
@@ -400,6 +409,7 @@ export class AuthController {
   }
   return {user}
   }
+  @UseGuards(TokenGuard)
     @Post('/sign-in/2fa')
   async SignIn2faUser(
     @Body() body: TwoFaDto,
@@ -457,6 +467,7 @@ export class AuthController {
    *   "message": "missing redirect uri"
    * }
    */
+  @Throttle({default:{limit:7,ttl:60000*10}})
   @Get('sign-in/google')
   async RedirectToGoogleOauth(
     @Query('redirect_url') redirect_url: string,
@@ -524,6 +535,7 @@ export class AuthController {
    *   "message": "Your Google email is not verified"
    * }
    */
+    @Throttle({default:{limit:7,ttl:60000*10}})
   @Post('/callback/google')
   async SignInWithGoogle(
     @Query() query: OAuthGoogleQueryParamsDto,
@@ -546,6 +558,7 @@ export class AuthController {
   return {user}
   }
   @UseGuards(JwtGuard)
+  @UseGuards(UserIdGuard)
   @Get('/me')
   async getCurrentUser(@Req() req:any) {
     const user = req.user;
