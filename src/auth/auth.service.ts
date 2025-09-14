@@ -438,4 +438,25 @@ export class AuthService {
     });
     return { success: true };
   }
+   async LogoutBySessionId(sessionId: string,userId:string) {
+    const session = await this.prisma.session.findFirst({
+      where: { id: sessionId, expires_at: { gt: new Date() } },
+    });
+    if (!session) throw new UnauthorizedException();
+    await this.prisma.session.delete({
+      where: { id: sessionId ,identifier_id:userId},
+    });
+    return { success: true };
+  }
+  async GetAllSessions(userId: string, currentSessionId: string) {
+    const sessions = await this.prisma.session.findMany({
+      where: { identifier_id: userId, expires_at: { gt: new Date() } },
+      orderBy: { created_at: 'desc' },
+    });
+    return sessions.map(session => ({
+      ...session,
+      sessionId: session.id,
+      active: session.id === currentSessionId,
+    }));
+  }
 }

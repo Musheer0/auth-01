@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Param,
   Patch,
   Post,
   Query,
@@ -27,6 +28,7 @@ import { Throttle } from '@nestjs/throttler';
 import { EmailGuard } from './guards/email.guard';
 import { TokenGuard } from './guards/token.guard';
 import { UserIdGuard } from './guards/userId.guard';
+import { P } from '@upstash/redis/zmscore-CgRD7oFR';
 const COOKIE_NAME = process.env.COOKIE_NAME||'session'
 const COOKIE_EXP = process.env.COOKIE_EXP_IN_MS || 604800000
    const getcookieExpDate = ()=>new Date(Date.now() + Number(COOKIE_EXP));
@@ -579,6 +581,20 @@ export class AuthController {
       sameSite: 'strict',
       signed: true,
     });
+    return { success: true };
+  }
+  @UseGuards(JwtGuard)
+  @Post('/logout/:id')
+  async LogoutById(@Req() req: any,@Param('id') id:string) {
+    const user = req.user?.user_id;
+    await this.authService.LogoutBySessionId(id,user);
+    return { success: true };
+  }
+  @UseGuards(JwtGuard)
+  @Post('/sessions/all')
+  async GetAllSessions(@Req() req: any) {
+    const session = req.user;
+    await this.authService.GetAllSessions(session.user_id,session.token);
     return { success: true };
   }
   /**
