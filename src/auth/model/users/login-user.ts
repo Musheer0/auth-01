@@ -1,5 +1,7 @@
 import { PrismaClient, User } from '@prisma/client';
 import * as argon2 from 'argon2';
+import { TwofaLogin } from './2fa-login';
+import { SignInUserDto } from 'src/dto/users/sign-in-user.dto';
 
 /**
  * Login user (credentials only)
@@ -12,7 +14,8 @@ export const loginUser = async (
   prisma: PrismaClient,
   email: string,
   password: string,
-): Promise<{ user?: User; error?: string }> => {
+  data:SignInUserDto
+): Promise<{ user?: User; error?: string ,twofa?:boolean,id?:string,expires_at?:Date}> => {
   // Step 1: Fetch user by email
   const user = await prisma.user.findUnique({
     where: { primary_email: email },
@@ -46,7 +49,10 @@ export const loginUser = async (
   if (!isPasswordValid) {
     return { error: 'Invalid credentials' };
   }
-
+  const res = await TwofaLogin(prisma,user)
+  if(res){
+     return {twofa:true,...res}
+  }
   // Step 5: Return full user object
   return { user };
 };

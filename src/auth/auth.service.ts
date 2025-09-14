@@ -30,6 +30,10 @@ import { GetOauthUserInfo } from './model/users/oauth/google/get-oauth-user-info
 import { OAuthGoogleQueryParamsDto } from 'src/dto/users/oauth/google/oauth-google.dto';
 import { CreateGoogleOauthUser } from './model/users/oauth/google/create-oauth-user-info';
 import { JwtToken } from 'src/types/jwt-token';
+import { Toggle2fa } from './model/users/toggle-2fa';
+import { Toggle2faDto } from 'src/dto/users/toggle-2fa.dto';
+import { SanitizeUser } from 'src/libs/sanitize-user';
+import { TwoFaDto } from 'src/dto/users/2fa/2fa.dto';
 
 @Injectable()
 export class AuthService {
@@ -239,10 +243,11 @@ export class AuthService {
 
   async signInUser(data: SignInUserDto, metadata: TclientMetadata) {
     // Step 1: loginUser returns { user?, error? }
-    const { user, error } = await loginUser(
+    const { user, error,twofa,id,expires_at } = await loginUser(
       this.prisma,
       data.email,
       data.password,
+      data
     );
 
     if (error) {
@@ -250,6 +255,9 @@ export class AuthService {
         throw new InternalServerErrorException();
       }
       throw new BadRequestException(error);
+    }
+    if(twofa){
+      return {twofa,id,expires_at}
     }
     if (user) {
       try {
@@ -282,6 +290,51 @@ export class AuthService {
         throw new InternalServerErrorException();
       }
     }
+  }
+  async signInUserWith2fa(data: TwoFaDto, metadata: TclientMetadata){
+     // Step 1: loginUser returns { user?, error? }
+    const verification_token =await VerifyToken(
+      $Enums.VerificationTokenScope.TWOFA_LOGIN,
+      data.token,
+      data.code,
+      this.prisma,
+    ); 
+    if(verification_token.userid){
+      const user = await GetUserById(this.prisma, verification_token.userid);
+      if (!user) throw new NotFoundException();
+      if (!user.is_verified) throw new BadRequestException('email not verified');
+      if (user.is_banned) throw new UnauthorizedException();
+        if (user) {
+      try {
+        // Step 2: create session
+        const session = await CreateSession(
+          user.id,
+          this.prisma,
+          metadata.ip,
+          metadata.userAgent,
+          metadata.os,
+        );
+
+        // Step 3: sign JWT
+        const jwt_payload: JwtToken = {
+          token: session.sessionId,
+          user_id: user.id,
+        };
+        const jwt_token = this.jwtService.sign(jwt_payload);
+        // Step 4: remove sensitive fields
+        const { password, verified_at, banned_at, is_banned, ...safeUser } =
+          user;
+        return {
+          token: jwt_token,
+          user: safeUser,
+        };
+      } catch (err) {
+        console.error('[sign-in user error]', err);
+        throw new InternalServerErrorException();
+      }
+    }
+    } 
+    else throw new BadRequestException(verification_token.error || 'something went wrong');
   }
   /**
    * Signs in a user using Google OAuth.
@@ -321,5 +374,62 @@ export class AuthService {
       token: jwt_token,
       user: safeUser,
     };
+  }
+  async Enable2fa(sessionId:string){
+    const session = await this.prisma.session.findFirst({
+      where: { id: sessionId ,expires_at: { gt: new Date()  } },
+    });    
+    if (!session) throw new UnauthorizedException();
+    const updatedUser= await Toggle2fa(this.prisma,session.identifier_id,true);
+    if(updatedUser.error && !updatedUser.user){
+      if (updatedUser.error.includes('internal server')) {
+        throw new InternalServerErrorException();
+      }
+      throw new BadRequestException(updatedUser.error);
+    }
+  if (!updatedUser.user) {
+    throw new InternalServerErrorException('User not found after updating 2FA');
+  }
+
+    return {user:SanitizeUser(updatedUser.user)};
+
+  }
+  async Disable2fa(sessionId:string ){    
+    const session = await this.prisma.session.findFirst({
+      where: { id: sessionId ,expires_at: { gt: new Date()  } },
+    });   
+    if (!session) throw new UnauthorizedException();
+    const updatedUser= await Toggle2fa(this.prisma,session.identifier_id,false);  
+     if(updatedUser.error && !updatedUser.user){
+      if (updatedUser.error.includes('internal server')) {
+        throw new InternalServerErrorException();
+      }
+      throw new BadRequestException(updatedUser.error);
+    }
+  if (!updatedUser.user) {
+    throw new InternalServerErrorException('User not found after updating 2FA');
+  }
+ return {user:SanitizeUser(updatedUser.user)};
+  }
+  async Me(sessionId:string){
+       const session = await this.prisma.session.findFirst({
+      where: { id: sessionId ,expires_at: { gt: new Date()  } },
+    });   
+    if (!session) throw new UnauthorizedException();
+    const user = await this.prisma.user.findUnique({
+      where: { id: session.identifier_id },
+    });
+    if (!user) throw new UnauthorizedException();
+    return SanitizeUser(user)
+  }
+  async Logout(sessionId: string) {
+    const session = await this.prisma.session.findFirst({
+      where: { id: sessionId, expires_at: { gt: new Date() } },
+    });
+    if (!session) throw new UnauthorizedException();
+    await this.prisma.session.delete({
+      where: { id: sessionId },
+    });
+    return { success: true };
   }
 }
