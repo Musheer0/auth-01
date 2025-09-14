@@ -3,10 +3,12 @@ import {
   Body,
   Controller,
   Get,
+  Patch,
   Post,
   Query,
   Req,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { InitializeUserDto } from 'src/dto/users/initialize-user.dto';
@@ -18,6 +20,9 @@ import { PasswordResetTokenDto } from 'src/dto/users/password-reset-token-dto';
 import { PasswordResetDto } from 'src/dto/users/password-reset-dto';
 import { SignInUserDto } from 'src/dto/users/sign-in-user.dto';
 import { OAuthGoogleQueryParamsDto } from 'src/dto/users/oauth/google/oauth-google.dto';
+import { JwtGuard } from './guards/jwt-auth.guard';
+import { Toggle2faDto } from 'src/dto/users/toggle-2fa.dto';
+import { TwoFaDto } from 'src/dto/users/2fa/2fa.dto';
 const COOKIE_NAME = process.env.COOKIE_NAME||'session'
 const COOKIE_EXP = process.env.COOKIE_EXP_IN_MS || 604800000
    const getcookieExpDate = ()=>new Date(Date.now() + Number(COOKIE_EXP));
@@ -153,6 +158,7 @@ export class AuthController {
   secure: process.env.NODE_ENV === 'production', // only HTTPS in prod
   sameSite: 'strict',                   // CSRF protection
   signed: true,                         // requires cookieParser(secret)
+
 });
   return {user}
   }
@@ -378,8 +384,12 @@ export class AuthController {
   ) {
     const data= await this.authService.signInUser(body, metadata);
     if(!data) throw new BadRequestException("error signing in your account")
-    const {user,token} =data
-  res.cookie(COOKIE_NAME, token, {
+    const {user,token,twofa,id,expires_at} =data
+  if(twofa){
+    return {twofa,verification_token:id,expires_at}
+  }
+  if(token){
+    res.cookie(COOKIE_NAME, token, {
   maxAge: Number(COOKIE_EXP),                // relative expiry (preferred)
   expires: getcookieExpDate(),             // absolute expiry (extra safe)
   httpOnly: true,                       // can’t touch with JS
@@ -387,6 +397,28 @@ export class AuthController {
   sameSite: 'strict',                   // CSRF protection
   signed: true,                         // requires cookieParser(secret)
 });
+  }
+  return {user}
+  }
+    @Post('/sign-in/2fa')
+  async SignIn2faUser(
+    @Body() body: TwoFaDto,
+    @GetClientMetadata() metadata: TclientMetadata,
+    @Res({passthrough:true}) res: Response,
+  ) {
+    const data= await this.authService.signInUserWith2fa(body, metadata);
+    if(!data) throw new BadRequestException("error signing in your account")
+    const {user,token} =data
+  if(token){
+    res.cookie(COOKIE_NAME, token, {
+  maxAge: Number(COOKIE_EXP),                // relative expiry (preferred)
+  expires: getcookieExpDate(),             // absolute expiry (extra safe)
+  httpOnly: true,                       // can’t touch with JS
+  secure: process.env.NODE_ENV === 'production', // only HTTPS in prod
+  sameSite: 'strict',                   // CSRF protection
+  signed: true,                         // requires cookieParser(secret)
+});
+  }
   return {user}
   }
 
@@ -427,11 +459,10 @@ export class AuthController {
    */
   @Get('sign-in/google')
   async RedirectToGoogleOauth(
-    @Res() res: Response,
     @Query('redirect_url') redirect_url: string,
   ) {
     const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-    if (redirect_url) throw new BadRequestException('missing redirect uri');
+    if (!redirect_url) throw new BadRequestException('missing redirect uri');
     const options = {
       client_id: process.env.GOOGLE_CLIENT_ID!,
       redirect_uri: redirect_url,
@@ -444,7 +475,7 @@ export class AuthController {
 
     url.search = new URLSearchParams(options).toString();
 
-    return res.redirect(url.toString());
+    return {url:url.toString()}
   }
   /**
    * Handles Google OAuth callback and signs in the user.
@@ -499,15 +530,93 @@ export class AuthController {
     @GetClientMetadata() metadata: TclientMetadata,
     @Res({passthrough:true}) res: Response,
   ) {
-   const {token,user} =await this.authService.SignInWithGoogle(query, metadata);
+   const {token,user,...rest} =await this.authService.SignInWithGoogle(query, metadata);
+   if(!token){
+    return rest
+   }
   res.cookie(COOKIE_NAME, token, {
   maxAge: Number(COOKIE_EXP),                // relative expiry (preferred)
   expires: getcookieExpDate(),             // absolute expiry (extra safe)
   httpOnly: true,                       // can’t touch with JS
   secure: process.env.NODE_ENV === 'production', // only HTTPS in prod
   sameSite: 'strict',                   // CSRF protection
-  signed: true,                         // requires cookieParser(secret)
+  signed: true,     
+                      // requires cookieParser(secret)
 });
   return {user}
+  }
+  @UseGuards(JwtGuard)
+  @Get('/me')
+  async getCurrentUser(@Req() req:any) {
+    const user = req.user;
+    if (!user) {
+      throw new BadRequestException('User not authenticated');
+    }
+    
+    return this.authService.Me(user.token)
+  }
+  @UseGuards(JwtGuard)
+  @Post('/logout')
+  async Logout(@Req() req: any, @Res({ passthrough: true }) res: Response) {
+    const token = req.user?.token;
+    await this.authService.Logout(token);
+    res.clearCookie(COOKIE_NAME, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      signed: true,
+    });
+    return { success: true };
+  }
+  /**
+   * @route POST /2fa
+   * @summary Enable or disable 2FA for the authenticated user.
+   *
+   * @description
+   * This endpoint allows a logged-in user to enable or disable two-factor authentication (2FA).
+   * The request body should contain a boolean flag `enable` to indicate the desired state.
+   *
+   * @param {Object} body - The request payload.
+   * @param {boolean} body.enable - Set to true to enable 2FA, false to disable.
+   * @param {any} req - The request object containing the authenticated user.
+   *
+   * @returns {Promise<Object>} Response object
+   * @returns {boolean} success - True if the operation succeeded.
+   * @returns {boolean} is2faEnabled - The new 2FA status for the user.
+   *
+   * @throws {BadRequestException} If the user is not authenticated or the request is invalid.
+   *
+   * @example
+   * // Request
+   * POST /2fa
+   * {
+   *   "enable": true
+   * }
+   *
+   * // Success Response
+   * {
+   *   "success": true,
+   *   "is2faEnabled": true
+   * }
+   */
+  @UseGuards(JwtGuard)
+  @Patch('/2fa')
+  async setTwoFactorAuth(
+    @Req() req: any,
+  ) {
+    const user = req.user;
+    if (!user) throw new BadRequestException('User not authenticated');
+    await this.authService.Enable2fa(user.token)
+    return { success: true };
+  }
+  @UseGuards(JwtGuard)
+  @Patch('/2fa/disable')
+  async DisaleTwoFactorAuth(
+    @Req() req: any,
+  ) {
+    const user = req.user;
+    if (!user) throw new BadRequestException('User not authenticated');
+     await this.authService.Disable2fa(user.token)
+    return { success: true};
   }
 }

@@ -27,6 +27,8 @@ model User {
   verified_at DateTime?
   is_banned Boolean @default(false)
   banned_at DateTime?
+  twofa_enabled Boolean @default(false)
+  twofa_enabled_at DateTime?
   provider Provider @default(CREDENTIALS)
   verification_tokens VerificationToken[]
   sessions Session[]
@@ -53,6 +55,7 @@ model Account {
 enum VerificationTokenScope{
   EMAIL_VERIFY
   PASSWORD_RESET
+  TWOFA_LOGIN
 }
 
 model VerificationToken{
