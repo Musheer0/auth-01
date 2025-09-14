@@ -530,7 +530,10 @@ export class AuthController {
     @GetClientMetadata() metadata: TclientMetadata,
     @Res({passthrough:true}) res: Response,
   ) {
-   const {token,user} =await this.authService.SignInWithGoogle(query, metadata);
+   const {token,user,...rest} =await this.authService.SignInWithGoogle(query, metadata);
+   if(!token){
+    return rest
+   }
   res.cookie(COOKIE_NAME, token, {
   maxAge: Number(COOKIE_EXP),                // relative expiry (preferred)
   expires: getcookieExpDate(),             // absolute expiry (extra safe)

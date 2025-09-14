@@ -19,5 +19,5 @@ export const TwofaLogin = async(prisma:PrismaClient,user:User)=>{
     });
     // send email
     await SendEmail(generateOtpEmail({title:"Your OTP Code",otp,email:user.primary_email,desc:'use this code for your 2fa login'}),user.primary_email,"Your OTP Code");
-    return {id:verification.id,expires_at:verification.expires_at}
+    return {verification_id:verification.id,expires_at:verification.expires_at}
 }

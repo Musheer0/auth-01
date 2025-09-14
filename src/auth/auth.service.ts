@@ -34,6 +34,7 @@ import { Toggle2fa } from './model/users/toggle-2fa';
 import { Toggle2faDto } from 'src/dto/users/toggle-2fa.dto';
 import { SanitizeUser } from 'src/libs/sanitize-user';
 import { TwoFaDto } from 'src/dto/users/2fa/2fa.dto';
+import { TwofaLogin } from './model/users/2fa-login';
 
 @Injectable()
 export class AuthService {
@@ -363,8 +364,13 @@ export class AuthService {
       metadata,
       oauth_user.token,
     );
+    const two2fa = await TwofaLogin(this.prisma,user.user)
+    if(two2fa){
+      return {...two2fa,user:user.user}
+    }
     const { password, verified_at, banned_at, is_banned, ...safeUser } =
       user.user;
+    
     const jwt_payload: JwtToken = {
       token: user.sessionId,
       user_id: user.user.id,
