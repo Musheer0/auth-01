@@ -9,6 +9,7 @@ import {
   Query,
   Req,
   Res,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
@@ -396,6 +397,7 @@ export class AuthController {
     const data= await this.authService.signInUser(body, metadata);
     if(!data) throw new BadRequestException("error signing in your account")
     const {user,token,twofa,id,expires_at} =data
+  console.log(data)
   if(twofa){
     return {twofa,verification_token:id,expires_at}
   }
@@ -560,15 +562,26 @@ export class AuthController {
   return {user}
   }
   @UseGuards(JwtGuard)
-  @UseGuards(UserIdGuard)
+  @Throttle({default:{limit:10,ttl:60000*3}})
   @Get('/me')
-  async getCurrentUser(@Req() req:any) {
+  async getCurrentUser(@Req() req:any,@Res({ passthrough: true }) res: Response) {
     const user = req.user;
     if (!user) {
       throw new BadRequestException('User not authenticated');
     }
     
-    return this.authService.Me(user.token)
+   const response = await  this.authService.Me(user.token)
+
+   if(!response){
+      res.clearCookie(COOKIE_NAME, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      signed: true,
+    });
+    throw new UnauthorizedException()
+   }
+   return response
   }
   @UseGuards(JwtGuard)
   @Post('/logout')

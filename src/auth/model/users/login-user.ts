@@ -15,7 +15,7 @@ export const loginUser = async (
   email: string,
   password: string,
   data:SignInUserDto
-): Promise<{ user?: User; error?: string ,twofa?:boolean,id?:string,expires_at?:Date}> => {
+): Promise<{ user?: User; error?: string ,twofa?:boolean,verification_id?:string,expires_at?:Date}> => {
   // Step 1: Fetch user by email
   const user = await prisma.user.findUnique({
     where: { primary_email: email },

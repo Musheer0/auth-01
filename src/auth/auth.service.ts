@@ -244,7 +244,7 @@ export class AuthService {
 
   async signInUser(data: SignInUserDto, metadata: TclientMetadata) {
     // Step 1: loginUser returns { user?, error? }
-    const { user, error,twofa,id,expires_at } = await loginUser(
+    const { user, error,twofa,verification_id,expires_at } = await loginUser(
       this.prisma,
       data.email,
       data.password,
@@ -258,7 +258,7 @@ export class AuthService {
       throw new BadRequestException(error);
     }
     if(twofa){
-      return {twofa,id,expires_at}
+      return {twofa,id:verification_id,expires_at}
     }
     if (user) {
       try {
@@ -421,11 +421,11 @@ export class AuthService {
        const session = await this.prisma.session.findFirst({
       where: { id: sessionId ,expires_at: { gt: new Date()  } },
     });   
-    if (!session) throw new UnauthorizedException();
+    if (!session) return null
     const user = await this.prisma.user.findUnique({
       where: { id: session.identifier_id },
     });
-    if (!user) throw new UnauthorizedException();
+    if (!user) return null
     return SanitizeUser(user)
   }
   async Logout(sessionId: string) {
